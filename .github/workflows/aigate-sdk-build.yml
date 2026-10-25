@@ -8,9 +8,9 @@ on:
         required: true
         type: string
       openwrt_version:
-        description: 'OpenWrt version (24.10 or 25.12 or both)'
+        description: 'OpenWrt version (24.10, 25.12, or all)'
         required: true
-        default: '25.12'
+        default: 'all'
 
 permissions:
   contents: write
@@ -26,6 +26,8 @@ jobs:
         ref:
           - openwrt-24.10
           - openwrt-25.12
+    outputs:
+      sdks: ${{ steps.out.outputs.sdks }}
     steps:
       - name: Checkout OpenWrt repo
         uses: actions/checkout@v4
@@ -46,13 +48,16 @@ jobs:
             JSON="$JSON"'{"arch":"'"$ARCH"'","ref":"'"$REF"'"}'
           done <<< $(perl ./scripts/dump-target-info.pl architectures 2>/dev/null)
           JSON="$JSON"']'
-          echo -e "\n---- sdks ----\n"
-          echo "$JSON"
           echo "sdks=$JSON" >> "$GITHUB_OUTPUT"
 
-      - name: Output matrix
+      - name: Write matrix output
         id: out
-        run: echo "sdks=${{ steps.find_targets.outputs.sdks }}" >> "$GITHUB_OUTPUT"
+        uses: cloudposse/github-action-matrix-outputs-write@main
+        with:
+          matrix-step-name: ${{ github.job }}
+          matrix-key: ${{ matrix.ref }}
+          outputs: |-
+            sdks: ${{ steps.find_targets.outputs.sdks }}
 
   gather_matrix:
     name: Gather build matrices
@@ -63,34 +68,23 @@ jobs:
     steps:
       - name: Read matrices
         id: read
-        uses: actions/download-artifact@v4
+        uses: cloudposse/github-action-matrix-outputs-read@main
         with:
-          path: ./matrices
-          pattern: matrix-*
-          merge-multiple: true
+          matrix-step-name: generate_matrix
       - name: Gather matrices
         id: gather
         run: |
-          # Use step outputs directly
-          result='[]'
-          for ref in openwrt-24.10 openwrt-25.12; do
-            # Read from step outputs
-            json=$(echo '${{ needs.generate_matrix.outputs.sdks }}' 2>/dev/null || echo '[]')
-            if [ "$json" != "[]" ]; then
-              result=$(echo "$result" "$json" | jq -c -s 'add')
-            fi
-          done
-          # Fallback: use step outputs from generate_matrix
-          echo "result=${{ needs.generate_matrix.outputs.sdks }}" >> "$GITHUB_OUTPUT"
+          result=$(jq -c '.sdks[]' <<< '${{ steps.read.outputs.result }}' | jq -c -s add)
+          echo "result=${result}" >> "$GITHUB_OUTPUT"
 
   release:
     name: Build ${{ matrix.arch }} (${{ matrix.ref }})
     runs-on: ubuntu-latest
-    needs: [generate_matrix]
+    needs: [generate_matrix, gather_matrix]
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.generate_matrix.outputs.sdks) }}
+        include: ${{ fromJson(needs.gather_matrix.outputs.result) }}
     steps:
       - name: Checkout source (peditx/peditxos-aigate)
         uses: actions/checkout@v4
@@ -119,4 +113,3 @@ jobs:
           name: luci-app-aigate-${{ matrix.ref }}-${{ matrix.arch }}
           path: ${{ steps.artifacts.outputs.pkg_dir }}/luci-app-aigate_*.{apk,ipk}
           retention-days: 7
-
