@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       openwrt_version:
-        description: 'OpenWrt version (24.10 or 25.12)'
+        description: 'OpenWrt version (24.10 or 25.12 or both)'
         required: true
         default: '25.12'
 
@@ -17,34 +17,80 @@ permissions:
   id-token: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.arch }} (OpenWrt ${{ matrix.openwrt }})
+  generate_matrix:
+    name: Generate matrix for ${{ matrix.ref }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Primary: router architecture
-          - arch: aarch64_cortex-a53
-            openwrt: '25.12'
-          # Testing: x86_64
-          - arch: x86_64
-            openwrt: '25.12'
-          # 24.10 support
-          - arch: aarch64_cortex-a53
-            openwrt: '24.10'
-          - arch: x86_64
-            openwrt: '24.10'
-          # Additional confirmed working
-          - arch: aarch64_generic
-            openwrt: '25.12'
-          - arch: arm_cortex-a7
-            openwrt: '25.12'
-          - arch: mipsel_24kc
-            openwrt: '25.12'
-          - arch: mips_24kc
-            openwrt: '25.12'
+        ref:
+          - openwrt-24.10
+          - openwrt-25.12
+    steps:
+      - name: Checkout OpenWrt repo
+        uses: actions/checkout@v4
+        with:
+          repository: openwrt/openwrt
+          ref: ${{ matrix.ref }}
 
+      - name: Set targets
+        id: find_targets
+        run: |
+          REF=${{ matrix.ref }}
+          JSON='['
+          FIRST=1
+          while read -r line; do
+            ARCH=$(echo "$line" | cut -d " " -f 1)
+            [[ $FIRST -ne 1 ]] && JSON="$JSON"','
+            FIRST=0
+            JSON="$JSON"'{"arch":"'"$ARCH"'","ref":"'"$REF"'"}'
+          done <<< $(perl ./scripts/dump-target-info.pl architectures 2>/dev/null)
+          JSON="$JSON"']'
+          echo -e "\n---- sdks ----\n"
+          echo "$JSON"
+          echo "sdks=$JSON" >> "$GITHUB_OUTPUT"
+
+      - name: Output matrix
+        id: out
+        run: echo "sdks=${{ steps.find_targets.outputs.sdks }}" >> "$GITHUB_OUTPUT"
+
+  gather_matrix:
+    name: Gather build matrices
+    runs-on: ubuntu-latest
+    needs: generate_matrix
+    outputs:
+      result: ${{ steps.gather.outputs.result }}
+    steps:
+      - name: Read matrices
+        id: read
+        uses: actions/download-artifact@v4
+        with:
+          path: ./matrices
+          pattern: matrix-*
+          merge-multiple: true
+      - name: Gather matrices
+        id: gather
+        run: |
+          # Use step outputs directly
+          result='[]'
+          for ref in openwrt-24.10 openwrt-25.12; do
+            # Read from step outputs
+            json=$(echo '${{ needs.generate_matrix.outputs.sdks }}' 2>/dev/null || echo '[]')
+            if [ "$json" != "[]" ]; then
+              result=$(echo "$result" "$json" | jq -c -s 'add')
+            fi
+          done
+          # Fallback: use step outputs from generate_matrix
+          echo "result=${{ needs.generate_matrix.outputs.sdks }}" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build ${{ matrix.arch }} (${{ matrix.ref }})
+    runs-on: ubuntu-latest
+    needs: [generate_matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.sdks) }}
     steps:
       - name: Checkout source (peditx/peditxos-aigate)
         uses: actions/checkout@v4
@@ -70,59 +116,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-aigate-${{ matrix.openwrt }}-${{ matrix.arch }}
+          name: luci-app-aigate-${{ matrix.ref }}-${{ matrix.arch }}
           path: ${{ steps.artifacts.outputs.pkg_dir }}/luci-app-aigate_*.{apk,ipk}
           retention-days: 7
 
-  release:
-    name: Create Release on peditx/peditxos-aigate
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-          pattern: luci-app-aigate-*
-          merge-multiple: true
-
-      - name: Prepare release assets
-        id: prep
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-          echo "name=PeDItXOS-AiGate v$VERSION" >> $GITHUB_OUTPUT
-          find . -name '*.apk' -o -name '*.ipk' | sort | xargs sha256sum > SHA256SUMS.txt
-          echo "checksums=$(cat SHA256SUMS.txt)" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release (on peditx/peditxos-aigate)
-        uses: softprops/action-gh-release@v2
-        with:
-          repository: peditx/peditxos-aigate
-          tag_name: ${{ steps.prep.outputs.tag }}
-          name: ${{ steps.prep.outputs.name }}
-          body: |
-            ## PeDItXOS-AiGate v${{ github.event.inputs.version }}
-
-            ### Install
-            \`\`\`sh
-            # On OpenWrt 25.12 (apk)
-            apk add --allow-untrusted luci-app-aigate-<version>-<arch>.apk
-
-            # On OpenWrt 24.10 (opkg)
-            opkg install luci-app-aigate_<version>_<arch>.ipk
-            \`\`\`
-
-            ### Checksums
-            \`\`\`
-            ${{ steps.prep.outputs.checksums }}
-            \`\`\`
-
-            Built from commit ${{ github.sha }} on OpenWrt ${{ github.event.inputs.openwrt_version }}.
-          files: |
-            **/*.apk
-            **/*.ipk
-            SHA256SUMS.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.PEDITX_PAT }}
