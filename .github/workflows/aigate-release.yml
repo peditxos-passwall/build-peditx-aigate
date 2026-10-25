@@ -1,0 +1,103 @@
+name: AiGate Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.6.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }} (OpenWrt 25.12)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64_cortex-a53
+          - arch: x86_64
+          - arch: aarch64_generic
+          - arch: arm_cortex-a7
+          - arch: mipsel_24kc
+          - arch: mips_24kc
+    steps:
+      - name: Checkout source (peditx/peditxos-aigate)
+        uses: actions/checkout@v4
+        with:
+          repository: peditx/peditxos-aigate
+          token: ${{ secrets.PEDITX_PAT }}
+
+      - name: Build Package
+        uses: moetayuko/gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.arch }}
+          EXTRA_FEEDS: src-git|aigate|https://github.com/peditx/peditxos-aigate
+          V: s
+          FORCE_UNSAFE_CONFIGURE: 1
+
+      - name: Collect artifacts
+        id: artifacts
+        run: |
+          PKG_DIR="bin/packages/${{ matrix.arch }}/base"
+          echo "pkg_dir=$PKG_DIR" >> $GITHUB_OUTPUT
+          find "$PKG_DIR" -name 'luci-app-aigate_*.apk' -o -name 'luci-app-aigate_*.ipk' | head -20
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-aigate-25.12-${{ matrix.arch }}
+          path: ${{ steps.artifacts.outputs.pkg_dir }}/luci-app-aigate_*.{apk,ipk}
+          retention-days: 7
+
+  release:
+    name: Create Release on peditx/peditxos-aigate
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          pattern: luci-app-aigate-25.12-*
+          merge-multiple: true
+
+      - name: Prepare release assets
+        id: prep
+        run: |
+          VERSION="0.6.0"
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "name=PeDItXOS-AiGate v$VERSION" >> $GITHUB_OUTPUT
+          find . -name '*.apk' -o -name '*.ipk' | sort | xargs sha256sum > SHA256SUMS.txt
+          echo "checksums=$(cat SHA256SUMS.txt)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release (on peditx/peditxos-aigate)
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: peditx/peditxos-aigate
+          tag_name: v0.6.0
+          name: PeDItXOS-AiGate v0.6.0
+          body: |
+            ## PeDItXOS-AiGate v0.6.0
+
+            ### Install
+            \`\`\`sh
+            # On OpenWrt 25.12 (apk)
+            apk add --allow-untrusted luci-app-aigate-0.6.0-<arch>.apk
+
+            # On OpenWrt 24.10 (opkg)
+            opkg install luci-app-aigate_0.6.0_<arch>.ipk
+            \`\`\`
+
+            Built from commit ${{ github.sha }} on OpenWrt 25.12.
+          files: |
+            **/*.apk
+            **/*.ipk
+            SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.PEDITX_PAT }}
