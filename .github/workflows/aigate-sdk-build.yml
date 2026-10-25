@@ -24,69 +24,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 25.12 - ALL architectures from SDK
-          - arch: x86_64
-            openwrt: '25.12'
+          # Primary: router architecture
           - arch: aarch64_cortex-a53
             openwrt: '25.12'
-          - arch: aarch64_cortex-a72
+          # Testing: x86_64
+          - arch: x86_64
             openwrt: '25.12'
+          # 24.10 support
+          - arch: aarch64_cortex-a53
+            openwrt: '24.10'
+          - arch: x86_64
+            openwrt: '24.10'
+          # Additional confirmed working
           - arch: aarch64_generic
             openwrt: '25.12'
-          - arch: arm_cortex-a53
-            openwrt: '25.12'
           - arch: arm_cortex-a7
-            openwrt: '25.12'
-          - arch: arm_cortex-a9
-            openwrt: '25.12'
-          - arch: arm_cortex-a15
-            openwrt: '25.12'
-          - arch: arm_arm1176jzf-s_vfp
-            openwrt: '25.12'
-          - arch: arm_arm1136jf-s_vfp
             openwrt: '25.12'
           - arch: mipsel_24kc
             openwrt: '25.12'
           - arch: mips_24kc
             openwrt: '25.12'
-          - arch: mips_24kc
-            openwrt: '25.12'
-            # duplicate for ar71xx vs ath79 - SDK handles internally
-          - arch: powerpc_8540
-            openwrt: '25.12'
-          - arch: riscv64
-            openwrt: '25.12'
-          - arch: arc
-            openwrt: '25.12'
-          # 24.10 - ALL available architectures
-          - arch: x86_64
-            openwrt: '24.10'
-          - arch: aarch64_cortex-a53
-            openwrt: '24.10'
-          - arch: aarch64_cortex-a72
-            openwrt: '24.10'
-          - arch: aarch64_generic
-            openwrt: '24.10'
-          - arch: arm_cortex-a53
-            openwrt: '24.10'
-          - arch: arm_cortex-a7
-            openwrt: '24.10'
-          - arch: arm_cortex-a9
-            openwrt: '24.10'
-          - arch: arm_cortex-a15
-            openwrt: '24.10'
-          - arch: arm_arm1176jzf-s_vfp
-            openwrt: '24.10'
-          - arch: arm_arm1136jf-s_vfp
-            openwrt: '24.10'
-          - arch: mipsel_24kc
-            openwrt: '24.10'
-          - arch: mips_24kc
-            openwrt: '24.10'
-          - arch: powerpc_8540
-            openwrt: '24.10'
-          - arch: riscv64
-            openwrt: '24.10'
 
     steps:
       - name: Checkout source (peditx/peditxos-aigate)
