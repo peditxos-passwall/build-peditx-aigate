@@ -24,56 +24,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 25.12 - CONFIRMED WORKING TARGETS ONLY
+          # 25.12 - CONFIRMED WORKING
           - arch: x86_64
             openwrt: '25.12'
-            target: x86
-            subtarget: '64'
           - arch: aarch64_cortex-a53
             openwrt: '25.12'
-            target: qualcommax
-            subtarget: ipq807x
           - arch: aarch64_generic
             openwrt: '25.12'
-            target: rockchip
-            subtarget: armv8
           - arch: arm_cortex-a7
             openwrt: '25.12'
-            target: sunxi
-            subtarget: cortexa7
           - arch: mipsel_24kc
             openwrt: '25.12'
-            target: ramips
-            subtarget: mt7621
           - arch: mips_24kc
             openwrt: '25.12'
-            target: ath79
-            subtarget: generic
           # 24.10 - CONFIRMED WORKING
           - arch: x86_64
             openwrt: '24.10'
-            target: x86
-            subtarget: '64'
           - arch: aarch64_cortex-a53
             openwrt: '24.10'
-            target: qualcommax
-            subtarget: ipq807x
           - arch: aarch64_generic
             openwrt: '24.10'
-            target: rockchip
-            subtarget: armv8
           - arch: arm_cortex-a7
             openwrt: '24.10'
-            target: sunxi
-            subtarget: cortexa7
           - arch: mipsel_24kc
             openwrt: '24.10'
-            target: ramips
-            subtarget: mt7621
           - arch: mips_24kc
             openwrt: '24.10'
-            target: ath79
-            subtarget: generic
 
     steps:
       - name: Checkout source (peditx/peditxos-aigate)
@@ -82,23 +58,12 @@ jobs:
           repository: peditx/peditxos-aigate
           token: ${{ secrets.PEDITX_PAT }}
 
-      - name: Set up OpenWrt SDK (${{ matrix.openwrt }})
-        uses: openwrt/gh-action-sdk@v1
-        with:
-          version: ${{ matrix.openwrt }}
-          target: ${{ matrix.target }}
-          subtarget: ${{ matrix.subtarget }}
-
-      - name: Add peditxos-aigate feed
-        run: |
-          echo "src-git aigate https://github.com/peditx/peditxos-aigate" >> feeds.conf
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-
-      - name: Build package
-        run: |
-          make package/luci-app-aigate/compile V=s
+      - name: Build Package
+        uses: moetayuko/gh-action-sdk@main
         env:
+          ARCH: ${{ matrix.arch }}
+          EXTRA_FEEDS: src-git|aigate|https://github.com/peditx/peditxos-aigate
+          V: s
           FORCE_UNSAFE_CONFIGURE: 1
 
       - name: Collect artifacts
