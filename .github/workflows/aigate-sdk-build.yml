@@ -7,10 +7,6 @@ on:
         description: 'Version to release (e.g. 0.6.0)'
         required: true
         type: string
-      arch:
-        description: 'Target architecture (e.g. aarch64_cortex-a53)'
-        required: true
-        default: 'aarch64_cortex-a53'
       openwrt_version:
         description: 'OpenWrt version (24.10 or 25.12)'
         required: true
@@ -22,8 +18,76 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ inputs.arch }} (OpenWrt ${{ inputs.openwrt_version }})
+    name: Build ${{ matrix.arch }} (OpenWrt ${{ matrix.openwrt }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 25.12 - ALL architectures from SDK
+          - arch: x86_64
+            openwrt: '25.12'
+          - arch: aarch64_cortex-a53
+            openwrt: '25.12'
+          - arch: aarch64_cortex-a72
+            openwrt: '25.12'
+          - arch: aarch64_generic
+            openwrt: '25.12'
+          - arch: arm_cortex-a53
+            openwrt: '25.12'
+          - arch: arm_cortex-a7
+            openwrt: '25.12'
+          - arch: arm_cortex-a9
+            openwrt: '25.12'
+          - arch: arm_cortex-a15
+            openwrt: '25.12'
+          - arch: arm_arm1176jzf-s_vfp
+            openwrt: '25.12'
+          - arch: arm_arm1136jf-s_vfp
+            openwrt: '25.12'
+          - arch: mipsel_24kc
+            openwrt: '25.12'
+          - arch: mips_24kc
+            openwrt: '25.12'
+          - arch: mips_24kc
+            openwrt: '25.12'
+            # duplicate for ar71xx vs ath79 - SDK handles internally
+          - arch: powerpc_8540
+            openwrt: '25.12'
+          - arch: riscv64
+            openwrt: '25.12'
+          - arch: arc
+            openwrt: '25.12'
+          # 24.10 - ALL available architectures
+          - arch: x86_64
+            openwrt: '24.10'
+          - arch: aarch64_cortex-a53
+            openwrt: '24.10'
+          - arch: aarch64_cortex-a72
+            openwrt: '24.10'
+          - arch: aarch64_generic
+            openwrt: '24.10'
+          - arch: arm_cortex-a53
+            openwrt: '24.10'
+          - arch: arm_cortex-a7
+            openwrt: '24.10'
+          - arch: arm_cortex-a9
+            openwrt: '24.10'
+          - arch: arm_cortex-a15
+            openwrt: '24.10'
+          - arch: arm_arm1176jzf-s_vfp
+            openwrt: '24.10'
+          - arch: arm_arm1136jf-s_vfp
+            openwrt: '24.10'
+          - arch: mipsel_24kc
+            openwrt: '24.10'
+          - arch: mips_24kc
+            openwrt: '24.10'
+          - arch: powerpc_8540
+            openwrt: '24.10'
+          - arch: riscv64
+            openwrt: '24.10'
+
     steps:
       - name: Checkout source (peditx/peditxos-aigate)
         uses: actions/checkout@v4
@@ -34,7 +98,7 @@ jobs:
       - name: Build Package
         uses: moetayuko/gh-action-sdk@main
         env:
-          ARCH: ${{ inputs.arch }}
+          ARCH: ${{ matrix.arch }}
           EXTRA_FEEDS: src-git|aigate|https://github.com/peditx/peditxos-aigate
           V: s
           FORCE_UNSAFE_CONFIGURE: 1
@@ -42,14 +106,14 @@ jobs:
       - name: Collect artifacts
         id: artifacts
         run: |
-          PKG_DIR="bin/packages/${{ inputs.arch }}/base"
+          PKG_DIR="bin/packages/${{ matrix.arch }}/base"
           echo "pkg_dir=$PKG_DIR" >> $GITHUB_OUTPUT
           find "$PKG_DIR" -name 'luci-app-aigate_*.apk' -o -name 'luci-app-aigate_*.ipk' | head -20
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-aigate-${{ inputs.openwrt_version }}-${{ inputs.arch }}
+          name: luci-app-aigate-${{ matrix.openwrt }}-${{ matrix.arch }}
           path: ${{ steps.artifacts.outputs.pkg_dir }}/luci-app-aigate_*.{apk,ipk}
           retention-days: 7
 
