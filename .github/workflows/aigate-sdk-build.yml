@@ -24,53 +24,63 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # 25.12 - CONFIRMED WORKING TARGETS ONLY
           - arch: x86_64
             openwrt: '25.12'
-            target: x86/64
-            subtarget: ''
+            target: x86
+            subtarget: '64'
           - arch: aarch64_cortex-a53
             openwrt: '25.12'
-            target: qualcommax/ipq807x
-            subtarget: ''
+            target: qualcommax
+            subtarget: ipq807x
           - arch: aarch64_generic
             openwrt: '25.12'
-            target: rockchip/armv8
-            subtarget: ''
+            target: rockchip
+            subtarget: armv8
           - arch: arm_cortex-a7
             openwrt: '25.12'
-            target: sunxi/cortexa7
-            subtarget: ''
-          - arch: arm_cortex-a15
-            openwrt: '25.12'
-            target: sunxi/cortexa15
-            subtarget: ''
+            target: sunxi
+            subtarget: cortexa7
           - arch: mipsel_24kc
             openwrt: '25.12'
-            target: ramips/mt7621
-            subtarget: ''
+            target: ramips
+            subtarget: mt7621
           - arch: mips_24kc
             openwrt: '25.12'
-            target: ar71xx/generic
-            subtarget: ''
+            target: ath79
+            subtarget: generic
+          # 24.10 - CONFIRMED WORKING
           - arch: x86_64
             openwrt: '24.10'
-            target: x86/64
-            subtarget: ''
+            target: x86
+            subtarget: '64'
           - arch: aarch64_cortex-a53
             openwrt: '24.10'
-            target: qualcommax/ipq807x
-            subtarget: ''
+            target: qualcommax
+            subtarget: ipq807x
+          - arch: aarch64_generic
+            openwrt: '24.10'
+            target: rockchip
+            subtarget: armv8
+          - arch: arm_cortex-a7
+            openwrt: '24.10'
+            target: sunxi
+            subtarget: cortexa7
+          - arch: mipsel_24kc
+            openwrt: '24.10'
+            target: ramips
+            subtarget: mt7621
+          - arch: mips_24kc
+            openwrt: '24.10'
+            target: ath79
+            subtarget: generic
+
     steps:
       - name: Checkout source (peditx/peditxos-aigate)
         uses: actions/checkout@v4
         with:
           repository: peditx/peditxos-aigate
           token: ${{ secrets.PEDITX_PAT }}
-
-      - name: Checkout builder repo (for feeds/keys)
-        uses: actions/checkout@v4
-        with:
-          path: builder
 
       - name: Set up OpenWrt SDK (${{ matrix.openwrt }})
         uses: openwrt/gh-action-sdk@v1
@@ -137,18 +147,18 @@ jobs:
             ## PeDItXOS-AiGate v${{ github.event.inputs.version }}
 
             ### Install
-            ```sh
+            \`\`\`sh
             # On OpenWrt 25.12 (apk)
             apk add --allow-untrusted luci-app-aigate-<version>-<arch>.apk
 
             # On OpenWrt 24.10 (opkg)
             opkg install luci-app-aigate_<version>_<arch>.ipk
-            ```
+            \`\`\`
 
             ### Checksums
-            ```
+            \`\`\`
             ${{ steps.prep.outputs.checksums }}
-            ```
+            \`\`\`
 
             Built from commit ${{ github.sha }} on OpenWrt ${{ github.event.inputs.openwrt_version }}.
           files: |
