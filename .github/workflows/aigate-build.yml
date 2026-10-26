@@ -30,7 +30,7 @@ jobs:
           token: ${{ secrets.PEDITX_PAT }}
 
       - name: Build Package
-        uses: moe/tayuko/gh-action-sdk@main
+        uses: moetayuko/gh-action-sdk@main
 
       - name: Find and Upload Package
         id: pkg
