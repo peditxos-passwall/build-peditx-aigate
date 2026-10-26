@@ -1,0 +1,92 @@
+name: AiGate Build for Router
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.6.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build aarch64_cortex-a53
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          repository: peditx/peditxos-aigate
+          token: ${{ secrets.PEDITX_PAT }}
+
+      - name: Build Package
+        uses: openwrt/gh-action-sdk@v1
+        with:
+          version: '25.12'
+          target: qualcommax
+          subtarget: ipq807x
+        env:
+          PACKAGES: luci-app-aigate
+
+      - name: Find and Upload Package
+        id: pkg
+        run: |
+          find bin -name 'luci-app-aigate_*.ipk' -o -name 'luci-app-aigate_*.apk' | head -5
+          PKG=$(find bin -name 'luci-app-aigate_*.ipk' -o -name 'luci-app-aigate_*.apk' | head -1)
+          echo "pkg_path=$PKG" >> $GITHUB_OUTPUT
+          echo "pkg_name=$(basename $PKG)" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-aigate
+          path: ${{ steps.pkg.outputs.pkg_path }}
+          retention-days: 7
+
+  release:
+    name: Create Release on peditx/peditxos-aigate
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: luci-app-aigate
+          path: ./pkg
+
+      - name: Prepare Release
+        id: prep
+        run: |
+          VERSION="0.6.0"
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "name=PeDItXOS-AiGate v$VERSION" >> $GITHUB_OUTPUT
+          ls -la pkg/
+          find pkg/ -name '*.apk' -o -name '*.ipk' | xargs sha256sum > SHA256SUMS.txt
+          echo "checksums=$(cat SHA256SUMS.txt)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: peditx/peditxos-aigate
+          tag_name: v0.6.0
+          name: PeDItXOS-AiGate v0.6.0
+          body: |
+            ## PeDItXOS-AiGate v0.6.0
+
+            ### Install on Router
+            \`\`\`sh
+            # On PeDitXOS 25.12 (apk)
+            apk add --allow-untrusted luci-app-aigate-0.6.0-*.apk
+            \`\`\`
+
+            Built from commit ${{ github.sha }} on OpenWrt 25.12.
+          files: |
+            pkg/*.apk
+            pkg/*.ipk
+            SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.PEDITX_PAT }}
