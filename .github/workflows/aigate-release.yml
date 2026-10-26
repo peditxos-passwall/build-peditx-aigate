@@ -1,4 +1,4 @@
-name: AiGate Release & Deploy
+name: AiGate Release
 
 on:
   workflow_dispatch:
@@ -55,25 +55,27 @@ jobs:
           path: ${{ steps.artifacts.outputs.pkg_dir }}/luci-app-aigate_*.{apk,ipk}
           retention-days: 7
 
-  release:
-    name: Create Release on peditx/peditxos-aigate
+  # مرحله واحد: جمع‌آوری همه artifactها و ساخت رلیز
+  collect_and_release:
+    name: Collect Artifacts & Create Release
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download all artifacts
+      - name: Download All Build Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          path: ./release-assets
           pattern: luci-app-aigate-25.12-*
           merge-multiple: true
 
-      - name: Prepare release assets
+      - name: Prepare Release
         id: prep
         run: |
           VERSION="0.6.0"
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "name=PeDItXOS-AiGate v$VERSION" >> $GITHUB_OUTPUT
-          find . -name '*.apk' -o -name '*.ipk' | sort | xargs sha256sum > SHA256SUMS.txt
+          ls -la release-assets/
+          find release-assets/ -name '*.apk' -o -name '*.ipk' | sort | xargs sha256sum > SHA256SUMS.txt
           echo "checksums=$(cat SHA256SUMS.txt)" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release (on peditx/peditxos-aigate)
@@ -96,44 +98,8 @@ jobs:
 
             Built from commit ${{ github.sha }} on OpenWrt 25.12.
           files: |
-            **/*.apk
-            **/*.ipk
+            release-assets/*.apk
+            release-assets/*.ipk
             SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.PEDITX_PAT }}
-
-  deploy:
-    name: Deploy to Package Repository
-    needs: release
-    runs-on: ubuntu-latest
-    if: ${{ !cancelled() }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Fetch All Builds
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: luci-app-aigate-25.12-*
-          merge-multiple: true
-
-      - name: Add public keys
-        run: |
-          ls -la dist/
-          # Public keys should be in repo or provided as secrets
-          # cp apk.pub ipk.pub dist/ 2>/dev/null || true
-
-      - name: Deploy to Server
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p ${{ secrets.SERVER_SSH_PORT || 22 }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-          rsync -avz --delete -e "ssh -p ${{ secrets.SERVER_SSH_PORT || 22 }}" dist/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/peditx-repo/nginx/www/openwrt-passwall-build/
-          rm -rf ~/.ssh/id_ed25519
-        env:
-          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
-          SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
-          SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
