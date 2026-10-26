@@ -1,4 +1,4 @@
-name: AiGate Release
+name: AiGate Release & Deploy
 
 on:
   workflow_dispatch:
@@ -101,3 +101,39 @@ jobs:
             SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.PEDITX_PAT }}
+
+  deploy:
+    name: Deploy to Package Repository
+    needs: release
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch All Builds
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: luci-app-aigate-25.12-*
+          merge-multiple: true
+
+      - name: Add public keys
+        run: |
+          ls -la dist/
+          # Public keys should be in repo or provided as secrets
+          # cp apk.pub ipk.pub dist/ 2>/dev/null || true
+
+      - name: Deploy to Server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.SERVER_SSH_PORT || 22 }} ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          rsync -avz --delete -e "ssh -p ${{ secrets.SERVER_SSH_PORT || 22 }}" dist/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/peditx-repo/nginx/www/openwrt-passwall-build/
+          rm -rf ~/.ssh/id_ed25519
+        env:
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_PORT: ${{ secrets.SERVER_SSH_PORT }}
