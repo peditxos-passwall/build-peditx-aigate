@@ -26,16 +26,15 @@ jobs:
       - name: Build Package
         uses: openwrt/gh-action-sdk@v1
         with:
-          version: '25.12'
-          target: qualcommax
-          subtarget: ipq807x
+          ARCH: aarch64_cortex-a53
         env:
           PACKAGES: luci-app-aigate
+          EXTRA_FEEDS: src-git|aigate|https://github.com/peditx/peditxos-aigate
+          V: s
 
       - name: Find and Upload Package
         id: pkg
         run: |
-          find bin -name 'luci-app-aigate_*.ipk' -o -name 'luci-app-aigate_*.apk' | head -5
           PKG=$(find bin -name 'luci-app-aigate_*.ipk' -o -name 'luci-app-aigate_*.apk' | head -1)
           echo "pkg_path=$PKG" >> $GITHUB_OUTPUT
           echo "pkg_name=$(basename $PKG)" >> $GITHUB_OUTPUT
@@ -79,7 +78,7 @@ jobs:
 
             ### Install on Router
             \`\`\`sh
-            # On PeDitXOS 25.12 (apk)
+            # On PeDItXOS 25.12 (apk)
             apk add --allow-untrusted luci-app-aigate-0.6.0-*.apk
             \`\`\`
 
