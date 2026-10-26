@@ -16,11 +16,6 @@ jobs:
   build:
     name: Build aarch64_cortex-a53
     runs-on: ubuntu-latest
-    env:
-      ARCH: aarch64_cortex-a53
-      PACKAGES: luci-app-aigate
-      EXTRA_FEEDS: src-git|aigate|https://github.com/peditx/peditxos-aigate
-      V: s
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -29,7 +24,13 @@ jobs:
           token: ${{ secrets.PEDITX_PAT }}
 
       - name: Build Package
-        uses: openwrt/gh-action-sdk@v1
+        uses: moe/tayuko/gh-action-sdk@main
+        env:
+          ARCH: aarch64_cortex-a53
+          PACKAGES: luci-app-aigate
+          EXTRA_FEEDS: src-git|aigate|https://github.com/peditx/peditxos-aigate
+          V: s
+          FORCE_UNSAFE_CONFIGURE: 1
 
       - name: Find and Upload Package
         id: pkg
